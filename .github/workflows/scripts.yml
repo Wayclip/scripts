@@ -36,4 +36,12 @@ jobs:
           username: root
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           source: "deploy/*"
-          target: "/opt/wayclip/scripts"
+          target: "/opt/wayclip/scripts/"
+
+      - name: Debug target folder
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_IP }}
+          username: root
+          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          script: ls -l /opt/wayclip/scripts
