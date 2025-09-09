@@ -14,20 +14,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Filter files without extension
+      - name: Collect files without extensions
         run: |
-          mkdir deploy
-          find . -maxdepth 1 -type f ! -name "*.*" -exec cp {} deploy/ \;
-          ls -l deploy
+          TMPDIR=$(mktemp -d)
+          echo "DEPLOY_DIR=$TMPDIR" >> $GITHUB_ENV
+          find . -maxdepth 1 -type f ! -name "*.*" -exec cp {} "$TMPDIR/" \;
+          echo "Files to deploy:"
+          ls -l "$TMPDIR"
 
-      - name: Cleanup old files on server
+      - name: Cleanup old scripts on server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_IP }}
           username: root
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           script: |
+            echo "Cleaning /opt/wayclip/scripts..."
             rm -rf /opt/wayclip/scripts/*
+            mkdir -p /opt/wayclip/scripts
 
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.7
@@ -35,13 +39,5 @@ jobs:
           host: ${{ secrets.SSH_IP }}
           username: root
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          source: "deploy/*"
+          source: "${{ env.DEPLOY_DIR }}/*"
           target: "/opt/wayclip/scripts/"
-
-      - name: Debug target folder
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SSH_IP }}
-          username: root
-          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          script: ls -l /opt/wayclip/scripts
