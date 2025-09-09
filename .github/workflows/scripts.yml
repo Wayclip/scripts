@@ -37,7 +37,7 @@ jobs:
           host: ${{ secrets.SSH_IP }}
           username: root
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          source: "deploy/*"
+          source: "deploy/."
           target: "/opt/wayclip/scripts"
 
       - name: Delete temporary deploy folder from runner
