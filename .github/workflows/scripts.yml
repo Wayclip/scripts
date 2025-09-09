@@ -1,0 +1,39 @@
+name: Deploy Scripts
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[SCRIPTS]')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Filter files without extension
+        run: |
+          mkdir deploy
+          find . -maxdepth 1 -type f ! -name "*.*" -exec cp {} deploy/ \;
+          ls -l deploy
+
+      - name: Cleanup old files on server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: oracle.konyogony.dev
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            rm -rf /opt/wayclip/scripts/*
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: oracle.konyogony.dev
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy/*"
+          target: "/opt/wayclip/scripts"
