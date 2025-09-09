@@ -23,7 +23,7 @@ jobs:
       - name: Cleanup old files on server
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: oracle.konyogony.dev
+          host: ${{ secrets.SSH_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
@@ -32,8 +32,8 @@ jobs:
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: oracle.konyogony.dev
+          host: ${{ secrets.SSH_IP }}
           username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           source: "deploy/*"
           target: "/opt/wayclip/scripts"
