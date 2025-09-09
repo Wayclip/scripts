@@ -14,14 +14,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Filter files without extension
+      - name: Create temporary deploy folder and filter files
         run: |
           mkdir deploy
           find . -maxdepth 1 -type f ! -name "*.*" -exec cp {} deploy/ \;
-          echo "Files to deploy:"
+          echo "Files to be deployed:"
           ls -l deploy
 
-      - name: Cleanup old scripts on server
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_IP }}
+          username: root
+          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          source: "deploy/*"
+          target: "/opt/wayclip/scripts"
+          strip_components: 1
+
+      - name: Cleanup, create directory, and debug on server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_IP }}
@@ -30,25 +40,8 @@ jobs:
           script: |
             rm -rf /opt/wayclip/scripts/*
             mkdir -p /opt/wayclip/scripts
+            echo "Contents of the target directory after deployment:"
+            ls -l /opt/wayclip/scripts
 
-      - name: Copy files individually to server
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SSH_IP }}
-          username: root
-          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          script: |
-            for f in deploy/*; do
-              cp "$f" /opt/wayclip/scripts/
-            done
-
-      - name: Delete temporary deploy folder
+      - name: Delete temporary deploy folder from runner
         run: rm -rf deploy
-
-      - name: Debug target folder
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SSH_IP }}
-          username: root
-          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          script: ls -l /opt/wayclip/scripts
