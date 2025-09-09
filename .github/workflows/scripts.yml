@@ -31,24 +31,25 @@ jobs:
             rm -rf /opt/wayclip/scripts
             mkdir -p /opt/wayclip/scripts
 
-      - name: Copy new files to server
+      - name: Copy script files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_IP }}
           username: root
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          source: "deploy/."
+          source: "deploy/*"
           target: "/opt/wayclip/scripts"
+          strip_components: 1
 
       - name: Delete temporary deploy folder from runner
         run: rm -rf deploy
 
-      - name: Verify deployment by listing remote files
+      - name: Verify final contents on remote server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_IP }}
           username: root
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           script: |
-            echo "Contents of the target directory after deployment:"
-            ls -l /opt/wayclip/scripts
+            echo "Final contents of /opt/wayclip/scripts:"
+            ls -la /opt/wayclip/scripts
