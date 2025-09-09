@@ -21,7 +21,17 @@ jobs:
           echo "Files to be deployed:"
           ls -l deploy
 
-      - name: Copy files to server
+      - name: Prepare remote directory by cleaning it up
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_IP }}
+          username: root
+          key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          script: |
+            rm -rf /opt/wayclip/scripts
+            mkdir -p /opt/wayclip/scripts
+
+      - name: Copy new files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_IP }}
@@ -29,19 +39,16 @@ jobs:
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           source: "deploy/*"
           target: "/opt/wayclip/scripts"
-          strip_components: 1
 
-      - name: Cleanup, create directory, and debug on server
+      - name: Delete temporary deploy folder from runner
+        run: rm -rf deploy
+
+      - name: Verify deployment by listing remote files
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_IP }}
           username: root
           key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           script: |
-            rm -rf /opt/wayclip/scripts/*
-            mkdir -p /opt/wayclip/scripts
             echo "Contents of the target directory after deployment:"
             ls -l /opt/wayclip/scripts
-
-      - name: Delete temporary deploy folder from runner
-        run: rm -rf deploy
