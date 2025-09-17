@@ -9,12 +9,12 @@ Bold_White=''
 Yellow=''
 
 if [[ -t 1 ]]; then
-  Color_Off='\033[0m'
-  Red='\033[0;31m'
-  Green='\033[0;32m'
-  Dim='\033[0;2m'
-  Bold_White='\033[1m'
-  Yellow='\033[0;33m'
+    Color_Off='\033[0m'
+    Red='\033[0;31m'
+    Green='\033[0;32m'
+    Dim='\033[0;2m'
+    Bold_White='\033[1m'
+    Yellow='\033[0;33m'
 fi
 
 error() { echo -e "${Red}error${Color_Off}: $*" >&2; }
@@ -26,142 +26,143 @@ warn() { echo -e "${Yellow}warning${Color_Off}: $*"; }
 MIN_GLIBC_VERSION="2.35"
 
 check_glibc_version() {
-  info "--> Checking operating system compatibility (GLIBC version)..."
-  local glibc_version
-  glibc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || echo "0.0")
+    info "--> Checking operating system compatibility (GLIBC version)..."
+    local glibc_version
+    glibc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || echo "0.0")
 
-  if [[ "$glibc_version" == "0.0" ]]; then
-    warn "Could not determine GLIBC version. Compatibility cannot be guaranteed."
-    return
-  fi
+    if [[ "$glibc_version" == "0.0" ]]; then
+        warn "Could not determine GLIBC version. Compatibility cannot be guaranteed."
+        return
+    fi
 
-  if ! printf '%s\n' "$MIN_GLIBC_VERSION" "$glibc_version" | sort -V -C; then
-    error "Your operating system is not supported."
-    echo
-    info "The Wayclip binaries require GLIBC version ${MIN_GLIBC_VERSION} or newer, but your system has version ${glibc_version}."
-    info_bold "This script cannot proceed."
-    exit 1
-  fi
+    if ! printf '%s\n' "$MIN_GLIBC_VERSION" "$glibc_version" | sort -V -C; then
+        error "Your operating system is not supported."
+        echo
+        info "The Wayclip binaries require GLIBC version ${MIN_GLIBC_VERSION} or newer, but your system has version ${glibc_version}."
+        info_bold "This script cannot proceed."
+        exit 1
+    fi
 
-  success "GLIBC version ($glibc_version) is compatible."
+    success "GLIBC version ($glibc_version) is compatible."
 }
 
 check_media_libs() {
-  info "--> Checking for required media libraries and encoders..."
-  info "--> Clearing GStreamer cache for a fresh check..."
-  rm -rf "${HOME}/.cache/gstreamer-1.0"
+    info "--> Checking for required media libraries and encoders..."
+    info "--> Clearing GStreamer cache for a fresh check..."
+    rm -rf "${HOME}/.cache/gstreamer-1.0"
 
-  if gst-inspect-1.0 nvh264enc >/dev/null 2>&1; then
-    success "Hardware encoding detected: NVIDIA NVENC (nvh264enc) is available."
-    if lspci | grep -qi 'VGA.*NVIDIA' && command -v nvidia-smi &>/dev/null; then
-      info "--> Checking NVIDIA driver status..."
-      if ! nvidia_smi_output=$(nvidia-smi 2>&1); then
-        if echo "$nvidia_smi_output" | grep -qi "Driver/library version mismatch"; then
-          warn "NVIDIA driver/library version mismatch detected."
-          info "This commonly occurs after a system or kernel update. Please REBOOT to fix it."
-        else
-          warn "The 'nvidia-smi' command failed, indicating a potential driver issue."
+    if gst-inspect-1.0 nvh264enc >/dev/null 2>&1; then
+        success "Hardware encoding detected: NVIDIA NVENC (nvh264enc) is available."
+        if lspci | grep -qi 'VGA.*NVIDIA' && command -v nvidia-smi &>/dev/null; then
+            info "--> Checking NVIDIA driver status..."
+            if ! nvidia_smi_output=$(nvidia-smi 2>&1); then
+                if echo "$nvidia_smi_output" | grep -qi "Driver/library version mismatch"; then
+                    warn "NVIDIA driver/library version mismatch detected."
+                    info "This commonly occurs after a system or kernel update. Please REBOOT to fix it."
+                else
+                    warn "The 'nvidia-smi' command failed, indicating a potential driver issue."
+                fi
+            else
+                success "NVIDIA driver appears to be operational."
+            fi
         fi
-      else
-        success "NVIDIA driver appears to be operational."
-      fi
+        return
+    elif gst-inspect-1.0 vaapih264enc >/dev/null 2>&1; then
+        success "Hardware encoding detected: VA-API (vaapih264enc) is available for AMD/Intel."
+        return
+    elif gst-inspect-1.0 x264enc >/dev/null 2>&1; then
+        success "Software encoding fallback detected: x264enc is available."
+        warn "For better performance, consider installing hardware-specific GStreamer plugins."
+        return
     fi
-    return
-  elif gst-inspect-1.0 vaapih264enc >/dev/null 2>&1; then
-    success "Hardware encoding detected: VA-API (vaapih264enc) is available for AMD/Intel."
-    return
-  elif gst-inspect-1.0 x264enc >/dev/null 2>&1; then
-    success "Software encoding fallback detected: x264enc is available."
-    warn "For better performance, consider installing hardware-specific GStreamer plugins."
-    return
-  fi
 
-  warn "No suitable GStreamer H.264 encoder found (nvh264enc, vaapih264enc, x264enc)."
-  info_bold "Attempting to guide installation of required GStreamer plugins..."
-  echo
+    warn "No suitable GStreamer H.264 encoder found (nvh264enc, vaapih264enc, x264enc)."
+    info_bold "Attempting to guide installation of required GStreamer plugins..."
+    echo
 
-  if command -v pacman >/dev/null; then
-    info_bold "Arch Linux detected."
-    if lspci | grep -qi 'VGA.*NVIDIA'; then
-      info "NVIDIA GPU detected. The 'gstreamer-nvidia' package from the AUR is required for hardware encoding."
-      AUR_HELPER=""
-      if command -v yay >/dev/null 2>&1; then AUR_HELPER="yay";
-      elif command -v paru >/dev/null 2>&1; then AUR_HELPER="paru"; fi
-      if [[ -n "$AUR_HELPER" ]]; then
-        read -p "Install 'gstreamer-nvidia' using '$AUR_HELPER' now? [Y/n] " -n 1 -r; echo
-        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
-          if ! $AUR_HELPER -S --needed gstreamer-nvidia; then
-            error "AUR helper failed to install 'gstreamer-nvidia'."
+    if command -v pacman >/dev/null; then
+        info_bold "Arch Linux detected."
+        if lspci | grep -qi 'VGA.*NVIDIA'; then
+            info "NVIDIA GPU detected. The 'gstreamer-nvidia' package from the AUR is required for hardware encoding."
+            AUR_HELPER=""
+            if command -v yay >/dev/null 2>&1; then
+                AUR_HELPER="yay"
+            elif command -v paru >/dev/null 2>&1; then AUR_HELPER="paru"; fi
+            if [[ -n "$AUR_HELPER" ]]; then
+                read -p "Install 'gstreamer-nvidia' using '$AUR_HELPER' now? [Y/n] " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+                    if ! $AUR_HELPER -S --needed gstreamer-nvidia; then
+                        error "AUR helper failed to install 'gstreamer-nvidia'."
+                        exit 1
+                    fi
+                else
+                    info "Installation cancelled. Please install 'gstreamer-nvidia' manually."
+                    exit 1
+                fi
+            else
+                warn "No common AUR helper (yay, paru) found. Please install 'gstreamer-nvidia' manually from the AUR."
+                exit 1
+            fi
+        elif lspci | grep -qi 'VGA.*\(AMD\|Intel\)'; then
+            info "AMD/Intel GPU detected. Installing VA-API plugins..."
+            if ! sudo pacman -S --needed --noconfirm gstreamer-vaapi; then
+                error "Failed to install 'gstreamer-vaapi'."
+                exit 1
+            fi
+        else
+            info "No specific supported GPU detected. Installing software encoder..."
+            if ! sudo pacman -S --needed --noconfirm gst-plugins-ugly; then
+                error "Failed to install 'gst-plugins-ugly' for software encoding."
+                exit 1
+            fi
+        fi
+    elif command -v apt-get >/dev/null; then
+        info_bold "Debian/Ubuntu detected. Installing required GStreamer packages..."
+        if ! (sudo apt-get update && sudo apt-get install -y gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-plugins-ugly); then
+            error "Failed to install GStreamer packages. Please run the command manually."
             exit 1
-          fi
-        else
-          info "Installation cancelled. Please install 'gstreamer-nvidia' manually."
-          exit 1
         fi
-      else
-        warn "No common AUR helper (yay, paru) found. Please install 'gstreamer-nvidia' manually from the AUR."
-        exit 1
-      fi
-    elif lspci | grep -qi 'VGA.*\(AMD\|Intel\)'; then
-      info "AMD/Intel GPU detected. Installing VA-API plugins..."
-      if ! sudo pacman -S --needed --noconfirm gstreamer-vaapi; then
-        error "Failed to install 'gstreamer-vaapi'."
-        exit 1
-      fi
+    elif command -v dnf >/dev/null; then
+        info_bold "Fedora detected. Installing required GStreamer packages from RPM Fusion..."
+        sudo dnf install -y \
+            "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+            "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+        if ! sudo dnf install -y gstreamer1-plugins-bad-freeworld gstreamer1-vaapi gstreamer1-plugins-ugly; then
+            error "Failed to install GStreamer packages. Please run the command manually."
+            exit 1
+        fi
     else
-      info "No specific supported GPU detected. Installing software encoder..."
-      if ! sudo pacman -S --needed --noconfirm gst-plugins-ugly; then
-        error "Failed to install 'gst-plugins-ugly' for software encoding."
+        error "Could not detect a supported package manager."
+        info "Please install GStreamer plugins for NVIDIA (nvh264enc), VA-API (vaapih264enc), or x264 (x264enc) for your distribution."
         exit 1
-      fi
     fi
-  elif command -v apt-get >/dev/null; then
-    info_bold "Debian/Ubuntu detected. Installing required GStreamer packages..."
-    if ! (sudo apt-get update && sudo apt-get install -y gstreamer1.0-plugins-bad gstreamer1.0-vaapi gstreamer1.0-plugins-ugly); then
-      error "Failed to install GStreamer packages. Please run the command manually."
-      exit 1
-    fi
-  elif command -v dnf >/dev/null; then
-    info_bold "Fedora detected. Installing required GStreamer packages from RPM Fusion..."
-    sudo dnf install -y \
-      "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
-      "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
-    if ! sudo dnf install -y gstreamer1-plugins-bad-freeworld gstreamer1-vaapi gstreamer1-plugins-ugly; then
-      error "Failed to install GStreamer packages. Please run the command manually."
-      exit 1
-    fi
-  else
-    error "Could not detect a supported package manager."
-    info "Please install GStreamer plugins for NVIDIA (nvh264enc), VA-API (vaapih264enc), or x264 (x264enc) for your distribution."
-    exit 1
-  fi
 
-  info "--> Re-checking for plugins after installation..."
-  rm -rf "${HOME}/.cache/gstreamer-1.0"
-  if gst-inspect-1.0 nvh264enc >/dev/null 2>&1 || gst-inspect-1.0 vaapih264enc >/dev/null 2>&1 || gst-inspect-1.0 x264enc >/dev/null 2>&1; then
-    success "GStreamer plugins are now available."
-  else
-    error "Plugins are still not available after installation attempt."
-    info "Please ensure the installation was successful and that your drivers are correctly configured."
-    exit 1
-  fi
+    info "--> Re-checking for plugins after installation..."
+    rm -rf "${HOME}/.cache/gstreamer-1.0"
+    if gst-inspect-1.0 nvh264enc >/dev/null 2>&1 || gst-inspect-1.0 vaapih264enc >/dev/null 2>&1 || gst-inspect-1.0 x264enc >/dev/null 2>&1; then
+        success "GStreamer plugins are now available."
+    else
+        error "Plugins are still not available after installation attempt."
+        info "Please ensure the installation was successful and that your drivers are correctly configured."
+        exit 1
+    fi
 }
 
-
 if command -v wayclip-cli >/dev/null; then
-  INSTALLED_PATH=$(command -v wayclip-cli)
-  if [[ "$INSTALLED_PATH" != "$HOME/.local/bin"* ]]; then
-    success "Wayclip is already installed system-wide at: $INSTALLED_PATH"
-    info "Please use your system package manager to update or remove it."
-    exit 0
-  fi
+    INSTALLED_PATH=$(command -v wayclip-cli)
+    if [[ "$INSTALLED_PATH" != "$HOME/.local/bin"* ]]; then
+        success "Wayclip is already installed system-wide at: $INSTALLED_PATH"
+        info "Please use your system package manager to update or remove it."
+        exit 0
+    fi
 fi
 
 for cmd in curl jq lspci gst-inspect-1.0; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    error "Required command '$cmd' not found. Please install it first."
-    exit 1
-  fi
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        error "Required command '$cmd' not found. Please install it first."
+        exit 1
+    fi
 done
 
 check_glibc_version
@@ -199,7 +200,7 @@ SERVICE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 mkdir -p "$SERVICE_DIR"
 info "Setting ExecStart path to ${INSTALL_DIR}/wayclip-daemon"
 
-curl -sL "$SERVICE_URL" | sed "s|^ExecStart=.*|ExecStart=${INSTALL_DIR}/wayclip-daemon|" > "${SERVICE_DIR}/wayclip-daemon.service"
+curl -sL "$SERVICE_URL" | sed "s|^ExecStart=.*|ExecStart=${INSTALL_DIR}/wayclip-daemon|" >"${SERVICE_DIR}/wayclip-daemon.service"
 chmod 644 "${SERVICE_DIR}/wayclip-daemon.service"
 
 systemctl --user daemon-reload
@@ -210,7 +211,7 @@ info "--> Fetching core components..."
 CORE_API_URL="https://api.github.com/repos/${CORE_REPO}/releases/latest"
 CORE_TARBALL_PATTERN="^wayclip-v.*-x86_64-unknown-linux-gnu\\.tar\\.gz$"
 CORE_DOWNLOAD_URL=$(curl -s "$CORE_API_URL" | jq -r --arg pattern "$CORE_TARBALL_PATTERN" \
-  '.assets[] | select(.name | test($pattern)) | .browser_download_url')
+    '.assets[] | select(.name | test($pattern)) | .browser_download_url')
 CORE_VERSION=$(curl -s "$CORE_API_URL" | jq -r '.tag_name')
 
 [[ -z "$CORE_DOWNLOAD_URL" ]] && error "Could not find a downloadable core components release." && exit 1
@@ -229,8 +230,8 @@ success "Installed trigger ${CORE_VERSION} → ${INSTALL_DIR}/wayclip-trigger"
 rm -rf "$TMP_DIR"
 
 case ":$PATH:" in
-  *":$HOME/.local/bin:"*) : ;;
-  *)
+*":$HOME/.local/bin:"*) : ;;
+*)
     echo
     warn "$HOME/.local/bin is not in your PATH."
     warn "Add this to your shell config (e.g., ~/.bashrc or ~/.zshrc):"
@@ -242,6 +243,6 @@ esac
 echo
 success "Wayclip installed successfully!"
 info_bold "Start and check daemon status with:"
-info_bold "  systemctl --user start wayclip-daemon.service"
-info_bold "  systemctl --user status wayclip-daemon.service"
+info_bold "  wayclip-cli daemon start"
+info_bold "  wayclip-cli daemon status"
 echo
